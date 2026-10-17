@@ -1,3 +1,5 @@
 <?php
 
-uses(JeffersonGoncalves\SavedFilter\Tests\TestCase::class)->in('Feature', 'Unit');
+use JeffersonGoncalves\SavedFilter\Tests\TestCase;
+
+uses(TestCase::class)->in('Feature');

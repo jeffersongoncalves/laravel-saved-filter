@@ -1,0 +1,40 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create(config('saved-filter.table', 'saved_filters'), function (Blueprint $table) {
+            $table->id();
+            // String keys: owners may use int, UUID or ULID primary keys. Null owner = preset.
+            $table->string('owner_type')->nullable();
+            $table->string('owner_id')->nullable();
+            $table->string('tenant_id')->nullable()->index();
+            $table->string('resource')->index();
+            $table->string('name');
+            $table->string('icon')->nullable();
+            $table->string('color')->nullable();
+            $table->json('filters')->nullable();
+            $table->string('sort_column')->nullable();
+            $table->string('sort_direction', 4)->nullable();
+            $table->json('toggled_columns')->nullable();
+            $table->string('search')->nullable();
+            $table->boolean('is_default')->default(false);
+            $table->boolean('is_public')->default(false);
+            $table->boolean('is_locked')->default(false);
+            $table->unsignedInteger('order_column')->default(0);
+            $table->timestamps();
+
+            $table->index(['owner_type', 'owner_id']);
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists(config('saved-filter.table', 'saved_filters'));
+    }
+};
