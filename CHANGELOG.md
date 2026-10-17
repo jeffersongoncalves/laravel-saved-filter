@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.1.0 - 2026-10-17
+
+- Saved filters also store the table's records per page (`records_per_page`) and grouping (`grouping`, `grouping_direction`), included in export/import.
+
+Upgrading from 1.0: run `php artisan migrate` — a new migration adds the three nullable columns.
+
 ## 1.0.0 - 2026-10-17
 
 First release: saved table filters (filters, sort, search, toggled columns) per owner, tenant and resource.
