@@ -19,7 +19,7 @@ return new class extends Migration
             $table->string('owner_type')->nullable();
             $table->string('owner_id')->nullable();
             $table->string('tenant_id')->nullable()->index();
-            $table->string('resource')->index();
+            $table->string('resource');
             $table->string('name');
             $table->string('icon')->nullable();
             $table->string('color')->nullable();
@@ -34,6 +34,8 @@ return new class extends Migration
             $table->unsignedInteger('order_column')->default(0);
             $table->timestamps();
 
+            // The table lookup: resource + tenant + owner. owner_type left out: 4 x varchar(255) exceeds MySQL's 3072-byte key limit.
+            $table->index(['resource', 'tenant_id', 'owner_id'], 'saved_filters_lookup_index');
             $table->index(['owner_type', 'owner_id']);
         });
     }
