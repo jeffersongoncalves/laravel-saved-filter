@@ -15,14 +15,7 @@ class SavedFilterServiceProvider extends PackageServiceProvider
         $package
             ->name('laravel-saved-filter')
             ->hasConfigFile('saved-filter')
+            ->hasMigrations(['create_saved_filters_table'])
             ->hasCommands([PruneCommand::class, ExportCommand::class, ImportCommand::class]);
-    }
-
-    public function packageBooted(): void
-    {
-        $migrations = __DIR__.'/../database/migrations';
-
-        $this->loadMigrationsFrom($migrations);
-        $this->publishes([$migrations => database_path('migrations')], 'saved-filter-migrations');
     }
 }

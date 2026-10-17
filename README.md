@@ -20,17 +20,17 @@ This package is the storage layer: a model, a migration, scopes, events and Arti
 
 ```bash
 composer require jeffersongoncalves/laravel-saved-filter
+php artisan vendor:publish --tag="saved-filter-migrations"
 php artisan migrate
 ```
 
-Upgrading from 1.0? Run `php artisan migrate` again: 1.1 adds the pagination and grouping columns.
-
-Optionally publish the config or the migration:
+Optionally publish the config:
 
 ```bash
-php artisan vendor:publish --tag=saved-filter-config
-php artisan vendor:publish --tag=saved-filter-migrations
+php artisan vendor:publish --tag="saved-filter-config"
 ```
+
+> **Installed 1.0 or 1.1?** Those versions ran their migrations straight from the package, so the `saved_filters` table already exists — don't publish the migration again. From 1.0, run `php artisan migrate` once on 1.1 before upgrading, or add the `records_per_page`, `grouping` and `grouping_direction` nullable string columns yourself.
 
 ## The model
 

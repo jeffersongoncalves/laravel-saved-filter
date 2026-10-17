@@ -24,6 +24,15 @@ function savedFilter(array $attributes = [], ?User $owner = null): SavedFilter
     ]);
 }
 
+it('publishes the migration stub', function () {
+    $this->artisan('vendor:publish', ['--tag' => 'saved-filter-migrations'])->assertSuccessful();
+
+    $published = File::glob(database_path('migrations/*_create_saved_filters_table.php'));
+    File::delete($published);
+
+    expect($published)->toHaveCount(1);
+});
+
 it('stores the table state with casts', function () {
     $filter = savedFilter(['sort_column' => 'title', 'sort_direction' => 'desc', 'toggled_columns' => ['body' => false]], user())->refresh();
 

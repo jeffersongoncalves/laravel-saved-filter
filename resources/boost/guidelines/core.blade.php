@@ -7,6 +7,7 @@ Saved table states (filters, sort, search, toggled columns) per owner, tenant an
 @verbatim
 <code-snippet name="Install" lang="bash">
 composer require jeffersongoncalves/laravel-saved-filter
+php artisan vendor:publish --tag="saved-filter-migrations"
 php artisan migrate
 </code-snippet>
 @endverbatim
