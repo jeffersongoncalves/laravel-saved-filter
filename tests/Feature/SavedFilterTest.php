@@ -1,8 +1,10 @@
 <?php
 
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Auth\User;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Schema;
 use JeffersonGoncalves\SavedFilter\Events\SavedFilterCreated;
 use JeffersonGoncalves\SavedFilter\Events\SavedFilterDeleted;
 use JeffersonGoncalves\SavedFilter\Models\SavedFilter;
@@ -24,13 +26,32 @@ function savedFilter(array $attributes = [], ?User $owner = null): SavedFilter
     ]);
 }
 
-it('publishes the migration stub', function () {
+it('publishes the migration stubs in order', function () {
     $this->artisan('vendor:publish', ['--tag' => 'saved-filter-migrations'])->assertSuccessful();
 
-    $published = File::glob(database_path('migrations/*_create_saved_filters_table.php'));
+    $published = File::glob(database_path('migrations/*_saved_filters_table.php'));
     File::delete($published);
 
-    expect($published)->toHaveCount(1);
+    expect(array_map(fn (string $file) => preg_replace('/^\d{4}_\d{2}_\d{2}_\d{6}_/', '', basename($file)), $published))
+        ->toBe(['create_saved_filters_table.php', 'add_pagination_and_grouping_to_saved_filters_table.php']);
+});
+
+it('runs the published migrations on tables 1.0 and 1.1 already created', function () {
+    $migration = fn (string $name) => require __DIR__."/../../database/migrations/{$name}.php.stub";
+    $filter = savedFilter(['records_per_page' => '25']);
+
+    // 1.1: table and columns already there.
+    $migration('create_saved_filters_table')->up();
+    $migration('add_pagination_and_grouping_to_saved_filters_table')->up();
+
+    expect($filter->refresh()->records_per_page)->toBe('25');
+
+    // 1.0: table without the pagination and grouping columns.
+    Schema::table('saved_filters', fn (Blueprint $table) => $table->dropColumn(['records_per_page', 'grouping', 'grouping_direction']));
+    $migration('add_pagination_and_grouping_to_saved_filters_table')->up();
+
+    expect(Schema::hasColumns('saved_filters', ['records_per_page', 'grouping', 'grouping_direction']))->toBeTrue()
+        ->and(SavedFilter::query()->count())->toBe(1);
 });
 
 it('stores the table state with casts', function () {

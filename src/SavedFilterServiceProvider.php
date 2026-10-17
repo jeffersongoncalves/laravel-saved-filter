@@ -15,7 +15,10 @@ class SavedFilterServiceProvider extends PackageServiceProvider
         $package
             ->name('laravel-saved-filter')
             ->hasConfigFile('saved-filter')
-            ->hasMigrations(['create_saved_filters_table'])
+            ->hasMigrations([
+                'create_saved_filters_table',
+                'add_pagination_and_grouping_to_saved_filters_table',
+            ])
             ->hasCommands([PruneCommand::class, ExportCommand::class, ImportCommand::class]);
     }
 }

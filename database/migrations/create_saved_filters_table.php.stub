@@ -8,6 +8,11 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // 1.0/1.1 ran this migration straight from the package: publishing it on those installs must not fail.
+        if (Schema::hasTable(config('saved-filter.table', 'saved_filters'))) {
+            return;
+        }
+
         Schema::create(config('saved-filter.table', 'saved_filters'), function (Blueprint $table) {
             $table->id();
             // String keys: owners may use int, UUID or ULID primary keys. Null owner = preset.
@@ -23,9 +28,6 @@ return new class extends Migration
             $table->string('sort_direction', 4)->nullable();
             $table->json('toggled_columns')->nullable();
             $table->string('search')->nullable();
-            $table->string('records_per_page', 10)->nullable();
-            $table->string('grouping')->nullable();
-            $table->string('grouping_direction', 4)->nullable();
             $table->boolean('is_default')->default(false);
             $table->boolean('is_public')->default(false);
             $table->boolean('is_locked')->default(false);

@@ -30,7 +30,7 @@ Optionally publish the config:
 php artisan vendor:publish --tag="saved-filter-config"
 ```
 
-> **Installed 1.0 or 1.1?** Those versions ran their migrations straight from the package, so the `saved_filters` table already exists — don't publish the migration again. From 1.0, run `php artisan migrate` once on 1.1 before upgrading, or add the `records_per_page`, `grouping` and `grouping_direction` nullable string columns yourself.
+> **Upgrading from 1.0 or 1.1?** Those versions ran their migrations straight from the package. Publish and migrate as above anyway: the migrations skip a table or columns that already exist, so 1.1 installs change nothing and 1.0 installs get the new columns.
 
 ## The model
 
