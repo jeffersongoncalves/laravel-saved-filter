@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.2.0 - 2026-10-17
+
+Migrations now ship as publishable stubs, like the other packages: `create_saved_filters_table` and `add_pagination_and_grouping_to_saved_filters_table`, declared in order with `hasMigrations()`. They are no longer loaded from the package.
+
+New installs:
+
+```bash
+php artisan vendor:publish --tag="saved-filter-migrations"
+php artisan migrate
+
+```
+Upgrading from 1.0/1.1 (which ran the migrations from the package): nothing to do. Publishing and migrating is safe too — the stubs skip a table or columns that already exist, so a 1.0 install gets the pagination/grouping columns and a 1.1 install is left unchanged.
+
 ## 1.1.0 - 2026-10-17
 
 - Saved filters also store the table's records per page (`records_per_page`) and grouping (`grouping`, `grouping_direction`), included in export/import.
