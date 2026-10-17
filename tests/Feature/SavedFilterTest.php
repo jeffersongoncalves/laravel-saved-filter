@@ -4,18 +4,19 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Auth\User;
+use Illuminate\Notifications\AnonymousNotifiable;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File;
-use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
 use JeffersonGoncalves\SavedFilter\Contracts\BuildsSavedFilterReports;
 use JeffersonGoncalves\SavedFilter\Events\SavedFilterCreated;
 use JeffersonGoncalves\SavedFilter\Events\SavedFilterDeleted;
 use JeffersonGoncalves\SavedFilter\Jobs\SendSavedFilterReport;
-use JeffersonGoncalves\SavedFilter\Mail\SavedFilterReportMail;
 use JeffersonGoncalves\SavedFilter\Models\SavedFilter;
 use JeffersonGoncalves\SavedFilter\Models\SavedFilterReport;
+use JeffersonGoncalves\SavedFilter\Notifications\SavedFilterReportNotification;
 use JeffersonGoncalves\SavedFilter\ReportFile;
 
 function user(string $name = 'Ana'): User
@@ -324,7 +325,7 @@ function fakeReportBuilder(): object
 }
 
 it('emails a due report once, with the file the builder made', function () {
-    Mail::fake();
+    Notification::fake();
     $builder = fakeReportBuilder();
     $ana = user();
     $this->travelTo('2026-10-14 09:00:00');
@@ -334,14 +335,13 @@ it('emails a due report once, with the file the builder made', function () {
     $this->artisan('saved-filter:send-reports')->expectsOutputToContain('Queued 1 report(s)');
     $this->artisan('saved-filter:send-reports')->expectsOutputToContain('Queued 0 report(s)');
 
-    Mail::assertSentCount(1);
-    Mail::assertSent(SavedFilterReportMail::class, fn (SavedFilterReportMail $mail) => $mail->hasTo('ana@example.com')
-        && $mail->envelope()->subject === 'Report: Published'
-        && $mail->count === 1
-        && $mail->fileName === 'published.csv'
-        && $mail->content === "title\nHello"
-        && $mail->schedule === 'Sent every day at 08:00.'
-        && $mail->url === 'https://app.test/posts');
+    Notification::assertSentOnDemandTimes(SavedFilterReportNotification::class, 1);
+    Notification::assertSentOnDemand(SavedFilterReportNotification::class, fn (SavedFilterReportNotification $notification, array $channels, AnonymousNotifiable $notifiable) => $notifiable->routes['mail'] === 'ana@example.com'
+        && $notification->count === 1
+        && $notification->schedule === 'Sent every day at 08:00.'
+        && $notification->url === 'https://app.test/posts'
+        && $notification->toMail($notifiable)->subject === 'Report: Published'
+        && $notification->toMail($notifiable)->rawAttachments === [['data' => "title\nHello", 'name' => 'published.csv', 'options' => []]]);
 
     expect($builder->calls)->toHaveCount(1)
         ->and($builder->calls[0]['user']->is($ana))->toBeTrue()
@@ -352,17 +352,18 @@ it('emails a due report once, with the file the builder made', function () {
 });
 
 it('renders the report email with the schedule and a button, without markdown from the view name', function () {
-    $html = (new SavedFilterReportMail('Hot [deals](https://evil.test) *now*', 3, 'csv', 'deals.csv', 'Sent every day at 08:00.', 'https://app.test/posts'))->render();
+    $render = fn (SavedFilterReportNotification $notification): string => (string) $notification->toMail(new AnonymousNotifiable)->render();
+    $html = $render(new SavedFilterReportNotification('Hot [deals](https://evil.test) *now*', 3, 'csv', 'deals.csv', 'Sent every day at 08:00.', 'https://app.test/posts'));
 
-    expect($html)->toContain('Report: Hot [deals](https://evil.test) *now*')
-        ->toContain('Attached: the 3 records of the view')
+    expect($html)->toContain('Attached: the 3 records of the view')
+        ->toContain('Hot [deals](https://evil.test) *now*')
         ->toContain('href="https://app.test/posts"')
         ->toContain('Open the view')
         ->toContain('Sent every day at 08:00. To stop receiving it, turn this report off in the view.')
         ->not->toContain('href="https://evil.test"')
         ->not->toContain('<em>now</em>');
 
-    $oneOff = (new SavedFilterReportMail('Deals', 0, 'csv', 'deals.csv'))->render();
+    $oneOff = $render(new SavedFilterReportNotification('Deals', 0, 'csv', 'deals.csv'));
 
     expect($oneOff)->not->toContain('Open the view')
         ->not->toContain('To stop receiving it');
@@ -381,7 +382,7 @@ it('describes the schedule in the app locale', function () {
 });
 
 it('sends nothing for paused, unshared or not yet due reports', function () {
-    Mail::fake();
+    Notification::fake();
     fakeReportBuilder();
     $ana = user();
     $this->travelTo('2026-10-14 09:00:00');
@@ -392,7 +393,7 @@ it('sends nothing for paused, unshared or not yet due reports', function () {
     $this->travelTo('2026-10-15 08:05:00');
     $this->artisan('saved-filter:send-reports')->expectsOutputToContain('Queued 0 report(s)');
 
-    Mail::assertNothingSent();
+    Notification::assertNothingSent();
 });
 
 it('gives the occurrence back when the send fails for good', function () {
@@ -416,14 +417,14 @@ it('gives the occurrence back when the send fails for good', function () {
 });
 
 it('leaves reports due when no builder is bound', function () {
-    Mail::fake();
+    Notification::fake();
     $this->travelTo('2026-10-14 09:00:00');
     $report = savedFilterReport(savedFilter(), user());
 
     $this->travelTo('2026-10-15 08:05:00');
     $this->artisan('saved-filter:send-reports')->assertSuccessful();
 
-    Mail::assertNothingSent();
+    Notification::assertNothingSent();
     expect($report->refresh()->last_sent_at)->toBeNull();
 });
 

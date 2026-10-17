@@ -8,10 +8,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Notification;
 use JeffersonGoncalves\SavedFilter\Contracts\BuildsSavedFilterReports;
-use JeffersonGoncalves\SavedFilter\Mail\SavedFilterReportMail;
 use JeffersonGoncalves\SavedFilter\Models\SavedFilterReport;
+use JeffersonGoncalves\SavedFilter\Notifications\SavedFilterReportNotification;
 
 /**
  * Builds a table state's report for a user with the bound BuildsSavedFilterReports and emails it to that user.
@@ -58,7 +58,9 @@ class SendSavedFilterReport implements ShouldQueue
 
         $schedule = $this->reportId === null ? null : SavedFilterReport::query()->find($this->reportId)?->describeSchedule();
 
-        Mail::to($this->user)->send(new SavedFilterReportMail($this->name, $file->count, $file->content, $file->fileName, $schedule, $file->url));
+        // On demand: the user model doesn't need the Notifiable trait.
+        Notification::route('mail', $this->user->getAttribute('email'))
+            ->notify(new SavedFilterReportNotification($this->name, $file->count, $file->content, $file->fileName, $schedule, $file->url));
     }
 
     /**

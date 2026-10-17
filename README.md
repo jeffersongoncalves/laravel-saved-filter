@@ -112,13 +112,9 @@ $report->isDue();   // once per occurrence (lastOccurrence()), never for one old
 
 ### Sending
 
-`saved-filter:send-reports` is scheduled every fifteen minutes (just run Laravel's scheduler). For each active report that is due and whose filter the user still sees, it marks the occurrence as sent and queues `SendSavedFilterReport`, which asks the bound builder for the file and mails it to the user (`SavedFilterReportMail`, translated: `saved-filter::saved-filter.mail.*`). Users without an `email` get nothing.
+`saved-filter:send-reports` is scheduled every fifteen minutes (just run Laravel's scheduler). For each active report that is due and whose filter the user still sees, it marks the occurrence as sent and queues `SendSavedFilterReport`, which asks the bound builder for the file and sends `SavedFilterReportNotification` to the user's `email` (an on-demand notification: the user model doesn't need `Notifiable`). Users without an `email` get nothing.
 
-The email uses Laravel's markdown mail layout (your app's theme and logo): the view name, how many records are attached, an **Open the view** button when the builder gives a `url`, and for scheduled sends when it goes out ("Sent every week (Monday) at 08:00.") and how to stop it. The view name is escaped, so a shared view can't put links or formatting into someone else's email. To change the layout:
-
-```bash
-php artisan vendor:publish --tag="saved-filter-views"   # resources/views/vendor/saved-filter/mail/report.blade.php
-```
+The notification is a regular Laravel `MailMessage`, so it uses your app's notification template, theme and logo: how many records are attached, an **Open the view** button when the builder gives a `url`, and for scheduled sends when it goes out ("Sent every week (Monday) at 08:00.") and how to stop it. Texts are translated (`saved-filter::saved-filter.mail.*`, 19 locales). The view name is escaped, so a shared view can't put links or formatting into someone else's email. Restyle it like any notification: `php artisan vendor:publish --tag=laravel-notifications` / `--tag=laravel-mail`.
 
 The job tries 3 times (1 and 5 minutes apart); when every attempt fails, the occurrence is given back and the next run sends it again. The command runs `withoutOverlapping()->onOneServer()`, so with several servers running the scheduler the cache driver must support locks (redis, database, memcached, dynamodb).
 
