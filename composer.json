@@ -1,0 +1,70 @@
+{
+    "name": "jeffersongoncalves/laravel-saved-filter",
+    "description": "Saved table filters for Laravel: store, share and restore filters, sort, search and column visibility per user, tenant and resource, with presets, JSON export/import and pruning.",
+    "keywords": [
+        "laravel",
+        "saved-filters",
+        "filters",
+        "table-views",
+        "saved-views",
+        "multi-tenant"
+    ],
+    "homepage": "https://github.com/jeffersongoncalves/laravel-saved-filter",
+    "license": "MIT",
+    "type": "library",
+    "authors": [
+        {
+            "name": "Jefferson Gonçalves",
+            "email": "gerson.simao.92@gmail.com",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "php": "^8.2",
+        "spatie/laravel-package-tools": "^1.16",
+        "illuminate/contracts": "^12.0|^13.0"
+    },
+    "require-dev": {
+        "larastan/larastan": "^3.0",
+        "laravel/pint": "^1.24",
+        "orchestra/testbench": "^10.0|^11.0",
+        "pestphp/pest": "^3.0|^4.0",
+        "pestphp/pest-plugin-laravel": "^3.0|^4.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "JeffersonGoncalves\\SavedFilter\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "JeffersonGoncalves\\SavedFilter\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "post-autoload-dump": "@php ./vendor/bin/testbench package:discover --ansi",
+        "test": "vendor/bin/pest",
+        "test-coverage": "vendor/bin/pest --coverage",
+        "format": "vendor/bin/pint",
+        "analyse": "vendor/bin/phpstan analyse"
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true,
+            "phpstan/extension-installer": true
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "JeffersonGoncalves\\SavedFilter\\SavedFilterServiceProvider"
+            ],
+            "aliases": {
+                "SavedFilter": "JeffersonGoncalves\\SavedFilter\\Facades\\SavedFilter"
+            }
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
