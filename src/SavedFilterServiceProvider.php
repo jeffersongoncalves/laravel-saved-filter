@@ -18,6 +18,7 @@ class SavedFilterServiceProvider extends PackageServiceProvider
             ->hasMigrations([
                 'create_saved_filters_table',
                 'add_pagination_and_grouping_to_saved_filters_table',
+                'add_column_searches_to_saved_filters_table',
             ])
             ->hasCommands([PruneCommand::class, ExportCommand::class, ImportCommand::class]);
     }

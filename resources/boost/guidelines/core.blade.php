@@ -31,6 +31,6 @@ SavedFilter::query()
 - `owner_type`/`owner_id` null = preset (visible to everyone in the tenant); `is_locked` = read-only in the UI.
 - `tenant_id` is a string column; `forTenant(null)` matches rows without a tenant (also the database-per-tenant case).
 - One default per owner, tenant and resource: set `is_default` through the model (`makeDefault()`), not a query-builder update.
-- `filters` is keyed by filter name, `toggled_columns` is a flat `name => bool` map; `records_per_page`, `grouping` and `grouping_direction` are nullable strings (null = table default).
+- `filters` is keyed by filter name, `toggled_columns` is a flat `name => bool` map, `column_searches` is `column => term` (nested for dotted names); `records_per_page`, `grouping` and `grouping_direction` are nullable strings (null = table default).
 - `saved-filter:export` / `saved-filter:import` move presets as JSON; `saved-filter:prune` removes filters of deleted owners and missing resource classes.
 - Events: `SavedFilterCreated`, `SavedFilterDeleted`, `SavedFilterApplied` (dispatched by the UI).

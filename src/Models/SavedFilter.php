@@ -25,6 +25,7 @@ use JeffersonGoncalves\SavedFilter\Events\SavedFilterDeleted;
  * @property string|null $sort_direction asc|desc
  * @property array<string, bool>|null $toggled_columns column name => visible
  * @property string|null $search
+ * @property array<string, mixed>|null $column_searches column name => search, nested for dotted names (author.name)
  * @property string|null $records_per_page a pagination option ("25", "all"), null = the table's default
  * @property string|null $grouping group name, null = not grouped
  * @property string|null $grouping_direction asc|desc
@@ -38,7 +39,7 @@ class SavedFilter extends Model
     /** The attributes that describe a filter on its own: what export writes and import reads. */
     public const PORTABLE = [
         'resource', 'name', 'icon', 'color', 'filters', 'sort_column', 'sort_direction',
-        'toggled_columns', 'search', 'records_per_page', 'grouping', 'grouping_direction',
+        'toggled_columns', 'search', 'column_searches', 'records_per_page', 'grouping', 'grouping_direction',
         'is_default', 'is_public', 'is_locked', 'order_column',
     ];
 
@@ -56,6 +57,7 @@ class SavedFilter extends Model
         'tenant_id' => 'string',
         'filters' => 'array',
         'toggled_columns' => 'array',
+        'column_searches' => 'array',
         'is_default' => 'boolean',
         'is_public' => 'boolean',
         'is_locked' => 'boolean',

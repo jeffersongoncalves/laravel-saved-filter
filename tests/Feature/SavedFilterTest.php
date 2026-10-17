@@ -33,7 +33,11 @@ it('publishes the migration stubs in order', function () {
     File::delete($published);
 
     expect(array_map(fn (string $file) => preg_replace('/^\d{4}_\d{2}_\d{2}_\d{6}_/', '', basename($file)), $published))
-        ->toBe(['create_saved_filters_table.php', 'add_pagination_and_grouping_to_saved_filters_table.php']);
+        ->toBe([
+            'create_saved_filters_table.php',
+            'add_pagination_and_grouping_to_saved_filters_table.php',
+            'add_column_searches_to_saved_filters_table.php',
+        ]);
 });
 
 it('runs the published migrations on tables 1.0 and 1.1 already created', function () {
@@ -43,6 +47,7 @@ it('runs the published migrations on tables 1.0 and 1.1 already created', functi
     // 1.1: table and columns already there.
     $migration('create_saved_filters_table')->up();
     $migration('add_pagination_and_grouping_to_saved_filters_table')->up();
+    $migration('add_column_searches_to_saved_filters_table')->up();
 
     expect($filter->refresh()->records_per_page)->toBe('25');
 
@@ -73,6 +78,20 @@ it('stores pagination and grouping, and exports them', function () {
         'grouping' => 'status',
         'grouping_direction' => 'desc',
     ]);
+});
+
+it('stores per-column searches and round-trips them through export and import', function () {
+    $searches = ['title' => 'laravel', 'author' => ['name' => 'Ana']];
+    $filter = savedFilter(['column_searches' => $searches])->refresh();
+
+    expect($filter->column_searches)->toBe($searches)
+        ->and($filter->toPortableArray()['column_searches'])->toBe($searches);
+
+    $exported = $filter->toPortableArray();
+    $filter->delete();
+    SavedFilter::import([$exported]);
+
+    expect(SavedFilter::query()->sole()->column_searches)->toBe($searches);
 });
 
 it('scopes by resource, tenant and owner', function () {
