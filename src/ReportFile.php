@@ -8,5 +8,7 @@ final readonly class ReportFile
         public string $content,
         public string $fileName,
         public int $count,
+        // Where the view opens, shown as a button in the email.
+        public ?string $url = null,
     ) {}
 }

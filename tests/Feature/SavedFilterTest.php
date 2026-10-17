@@ -314,7 +314,7 @@ function fakeReportBuilder(): object
         {
             $this->calls[] = compact('user', 'state', 'name', 'format', 'context');
 
-            return new ReportFile("title\nHello", 'published.csv', 1);
+            return new ReportFile("title\nHello", 'published.csv', 1, 'https://app.test/posts');
         }
     };
 
@@ -339,7 +339,9 @@ it('emails a due report once, with the file the builder made', function () {
         && $mail->envelope()->subject === 'Report: Published'
         && $mail->count === 1
         && $mail->fileName === 'published.csv'
-        && $mail->content === "title\nHello");
+        && $mail->content === "title\nHello"
+        && $mail->schedule === 'Sent every day at 08:00.'
+        && $mail->url === 'https://app.test/posts');
 
     expect($builder->calls)->toHaveCount(1)
         ->and($builder->calls[0]['user']->is($ana))->toBeTrue()
@@ -347,6 +349,35 @@ it('emails a due report once, with the file the builder made', function () {
         ->and($builder->calls[0]['state']['search'])->toBe('laravel')
         ->and($builder->calls[0]['format'])->toBe('csv')
         ->and($builder->calls[0]['context'])->toBe(['panel' => 'admin', 'tenant_id' => '7']);
+});
+
+it('renders the report email with the schedule and a button, without markdown from the view name', function () {
+    $html = (new SavedFilterReportMail('Hot [deals](https://evil.test) *now*', 3, 'csv', 'deals.csv', 'Sent every day at 08:00.', 'https://app.test/posts'))->render();
+
+    expect($html)->toContain('Report: Hot [deals](https://evil.test) *now*')
+        ->toContain('Attached: the 3 records of the view')
+        ->toContain('href="https://app.test/posts"')
+        ->toContain('Open the view')
+        ->toContain('Sent every day at 08:00. To stop receiving it, turn this report off in the view.')
+        ->not->toContain('href="https://evil.test"')
+        ->not->toContain('<em>now</em>');
+
+    $oneOff = (new SavedFilterReportMail('Deals', 0, 'csv', 'deals.csv'))->render();
+
+    expect($oneOff)->not->toContain('Open the view')
+        ->not->toContain('To stop receiving it');
+});
+
+it('describes the schedule in the app locale', function () {
+    $report = fn (array $attributes) => new SavedFilterReport(['time' => '08:00', ...$attributes]);
+
+    expect($report(['frequency' => 'daily'])->describeSchedule())->toBe('Sent every day at 08:00.')
+        ->and($report(['frequency' => 'weekly', 'day' => 1])->describeSchedule())->toBe('Sent every week (Monday) at 08:00.')
+        ->and($report(['frequency' => 'monthly', 'day' => 20])->describeSchedule())->toBe('Sent every month on day 20 at 08:00.');
+
+    app()->setLocale('pt_BR');
+
+    expect($report(['frequency' => 'weekly', 'day' => 5])->describeSchedule())->toBe('Enviado toda semana (sexta-feira) às 08:00.');
 });
 
 it('sends nothing for paused, unshared or not yet due reports', function () {

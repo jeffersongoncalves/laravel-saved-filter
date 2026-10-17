@@ -56,7 +56,9 @@ class SendSavedFilterReport implements ShouldQueue
             return;
         }
 
-        Mail::to($this->user)->send(new SavedFilterReportMail($this->name, $file->count, $file->content, $file->fileName));
+        $schedule = $this->reportId === null ? null : SavedFilterReport::query()->find($this->reportId)?->describeSchedule();
+
+        Mail::to($this->user)->send(new SavedFilterReportMail($this->name, $file->count, $file->content, $file->fileName, $schedule, $file->url));
     }
 
     /**

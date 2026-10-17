@@ -83,6 +83,19 @@ class SavedFilterReport extends Model
         $query->where('user_type', $user->getMorphClass())->where('user_id', (string) $user->getKey());
     }
 
+    /** "Sent every Monday at 08:00." in the app locale. */
+    public function describeSchedule(): string
+    {
+        return match ($this->frequency) {
+            self::WEEKLY => __('saved-filter::saved-filter.schedule.weekly', [
+                'day' => now()->startOfWeek(CarbonInterface::MONDAY)->addDays(max(1, min(7, (int) $this->day)) - 1)->locale(app()->getLocale())->dayName,
+                'time' => $this->time,
+            ]),
+            self::MONTHLY => __('saved-filter::saved-filter.schedule.monthly', ['day' => max(1, min(28, (int) $this->day)), 'time' => $this->time]),
+            default => __('saved-filter::saved-filter.schedule.daily', ['time' => $this->time]),
+        };
+    }
+
     /** The latest scheduled moment at or before now. */
     public function lastOccurrence(?CarbonInterface $now = null): CarbonInterface
     {
