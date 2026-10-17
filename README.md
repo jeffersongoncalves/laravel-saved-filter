@@ -113,6 +113,8 @@ $report->isDue();   // once per occurrence (lastOccurrence()), never for one old
 
 `saved-filter:send-reports` is scheduled every fifteen minutes (just run Laravel's scheduler). For each active report that is due and whose filter the user still sees, it marks the occurrence as sent and queues `SendSavedFilterReport`, which asks the bound builder for the file and mails it to the user (`SavedFilterReportMail`, translated: `saved-filter::saved-filter.mail.*`). Users without an `email` get nothing.
 
+The job tries 3 times (1 and 5 minutes apart); when every attempt fails, the occurrence is given back and the next run sends it again. The command runs `withoutOverlapping()->onOneServer()`, so with several servers running the scheduler the cache driver must support locks (redis, database, memcached, dynamodb).
+
 The file comes from an implementation of `BuildsSavedFilterReports` bound in the container — filament-saved-filter binds one. Without a binding the command sends nothing and leaves the reports due.
 
 ```php
@@ -173,7 +175,7 @@ php artisan saved-filter:prune                                   # owners delete
 php artisan saved-filter:prune --resource=legacy-orders --dry-run
 ```
 
-Deletes the filters whose owner no longer exists and those whose `resource` looks like a class name (`App\...`) that doesn't exist anymore. `--resource` adds discontinued tables by name. Schedule it if you like:
+Deletes the filters whose owner no longer exists and those whose `resource` looks like a class name (`App\...`) that doesn't exist anymore. `--resource` adds discontinued tables by name. It also deletes the reports whose subscriber no longer exists (a deleted filter takes its reports along). Schedule it if you like:
 
 ```php
 Schedule::command('saved-filter:prune')->weekly();

@@ -33,6 +33,8 @@ class SendReportsCommand extends Command
                 return;
             }
 
+            // Claimed before queueing, so a slow queue never gets the same occurrence twice; the job gives it back if it fails.
+            $previousSentAt = $report->last_sent_at?->toDateTimeString();
             $report->update(['last_sent_at' => now()]);
 
             SendSavedFilterReport::dispatch(
@@ -41,6 +43,8 @@ class SendReportsCommand extends Command
                 $filter->name,
                 $report->format,
                 [...$report->context ?? [], 'tenant_id' => $filter->tenant_id],
+                $report->id,
+                $previousSentAt,
             );
 
             $sent++;

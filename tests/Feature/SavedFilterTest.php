@@ -7,10 +7,12 @@ use Illuminate\Foundation\Auth\User;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
 use JeffersonGoncalves\SavedFilter\Contracts\BuildsSavedFilterReports;
 use JeffersonGoncalves\SavedFilter\Events\SavedFilterCreated;
 use JeffersonGoncalves\SavedFilter\Events\SavedFilterDeleted;
+use JeffersonGoncalves\SavedFilter\Jobs\SendSavedFilterReport;
 use JeffersonGoncalves\SavedFilter\Mail\SavedFilterReportMail;
 use JeffersonGoncalves\SavedFilter\Models\SavedFilter;
 use JeffersonGoncalves\SavedFilter\Models\SavedFilterReport;
@@ -190,7 +192,7 @@ it('rejects an unreadable import file', function () {
     $this->artisan('saved-filter:import', ['path' => 'missing.json'])->assertFailed();
 });
 
-it('prunes filters of deleted owners and gone resources', function () {
+it('prunes filters of deleted owners and gone resources, and reports of deleted users', function () {
     $ana = user();
     $bob = user('Bob');
     $kept = savedFilter([], $ana);
@@ -198,15 +200,19 @@ it('prunes filters of deleted owners and gone resources', function () {
     $gone = savedFilter(['resource' => 'App\\Filament\\Resources\\GoneResource'], $ana);
     $discontinued = savedFilter(['resource' => 'legacy-table'], $ana);
     $preset = savedFilter();
+    $anasReport = savedFilterReport($preset, $ana);
+    savedFilterReport($preset, $bob);
     $bob->delete();
 
-    $this->artisan('saved-filter:prune', ['--dry-run' => true])->expectsOutputToContain('Would delete 2');
-    expect(SavedFilter::query()->count())->toBe(5);
+    $this->artisan('saved-filter:prune', ['--dry-run' => true])->expectsOutputToContain('Would delete 2 saved filter(s) and 1 report(s)');
+    expect(SavedFilter::query()->count())->toBe(5)
+        ->and(SavedFilterReport::query()->count())->toBe(2);
 
     $this->artisan('saved-filter:prune', ['--resource' => ['legacy-table']])->assertSuccessful();
 
     expect(SavedFilter::query()->pluck('id')->all())->toEqualCanonicalizing([$kept->id, $preset->id])
-        ->and(SavedFilter::query()->whereKey([$orphan->id, $gone->id, $discontinued->id])->exists())->toBeFalse();
+        ->and(SavedFilter::query()->whereKey([$orphan->id, $gone->id, $discontinued->id])->exists())->toBeFalse()
+        ->and(SavedFilterReport::query()->pluck('id')->all())->toBe([$anasReport->id]);
 });
 
 function savedFilterReport(SavedFilter $filter, User $user, array $attributes = []): SavedFilterReport
@@ -342,6 +348,26 @@ it('sends nothing for paused, unshared or not yet due reports', function () {
     Mail::assertNothingSent();
 });
 
+it('gives the occurrence back when the send fails for good', function () {
+    Queue::fake();
+    fakeReportBuilder();
+    $this->travelTo('2026-10-13 09:00:00');
+    $report = savedFilterReport(savedFilter(), user(), ['last_sent_at' => '2026-10-14 08:00:00']);
+
+    $this->travelTo('2026-10-15 08:05:00');
+    $this->artisan('saved-filter:send-reports')->expectsOutputToContain('Queued 1 report(s)');
+
+    $job = Queue::pushed(SendSavedFilterReport::class)->sole();
+    expect($job->reportId)->toBe($report->id)
+        ->and($job->previousSentAt)->toBe('2026-10-14 08:00:00')
+        ->and($report->refresh()->last_sent_at->toDateTimeString())->toBe('2026-10-15 08:05:00');
+
+    $job->failed();
+
+    expect($report->refresh()->last_sent_at->toDateTimeString())->toBe('2026-10-14 08:00:00');
+    $this->artisan('saved-filter:send-reports')->expectsOutputToContain('Queued 1 report(s)');
+});
+
 it('leaves reports due when no builder is bound', function () {
     Mail::fake();
     $this->travelTo('2026-10-14 09:00:00');
@@ -357,5 +383,7 @@ it('leaves reports due when no builder is bound', function () {
 it('schedules the reports every fifteen minutes', function () {
     $event = collect(app(Schedule::class)->events())->first(fn ($event) => str_contains((string) $event->command, 'saved-filter:send-reports'));
 
-    expect($event?->expression)->toBe('*/15 * * * *');
+    expect($event?->expression)->toBe('*/15 * * * *')
+        ->and($event->withoutOverlapping)->toBeTrue()
+        ->and($event->onOneServer)->toBeTrue();
 });

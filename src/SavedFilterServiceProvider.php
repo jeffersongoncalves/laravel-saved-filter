@@ -30,9 +30,11 @@ class SavedFilterServiceProvider extends PackageServiceProvider
     public function packageBooted(): void
     {
         // Cheap when nothing is due; the reports go out within 15 minutes of their time.
+        // onOneServer needs a cache driver with locks (redis, database, memcached...) when several servers run the scheduler.
         $this->callAfterResolving(Schedule::class, fn (Schedule $schedule) => $schedule
             ->command(SendReportsCommand::class)
             ->everyFifteenMinutes()
-            ->withoutOverlapping());
+            ->withoutOverlapping()
+            ->onOneServer());
     }
 }
