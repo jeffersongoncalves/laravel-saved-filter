@@ -23,6 +23,8 @@ composer require jeffersongoncalves/laravel-saved-filter
 php artisan migrate
 ```
 
+Upgrading from 1.0? Run `php artisan migrate` again: 1.1 adds the pagination and grouping columns.
+
 Optionally publish the config or the migration:
 
 ```bash
@@ -44,6 +46,8 @@ php artisan vendor:publish --tag=saved-filter-migrations
 | `sort_column`, `sort_direction` | `asc` / `desc` |
 | `toggled_columns` | `{"column": true/false}` (JSON) |
 | `search` | search term |
+| `records_per_page` | pagination option (`"25"`, `"all"`), `null` = the table's default |
+| `grouping`, `grouping_direction` | group name and `asc` / `desc`, `null` = not grouped |
 | `is_default` | opened automatically — one per owner, tenant and resource (marking another unmarks the previous one) |
 | `is_public` | visible to the other users of the tenant |
 | `is_locked` | read-only in the UI |

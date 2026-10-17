@@ -35,6 +35,16 @@ it('stores the table state with casts', function () {
         ->and($filter->isPreset())->toBeFalse();
 });
 
+it('stores pagination and grouping, and exports them', function () {
+    $filter = savedFilter(['records_per_page' => '25', 'grouping' => 'status', 'grouping_direction' => 'desc'])->refresh();
+
+    expect($filter->toPortableArray())->toMatchArray([
+        'records_per_page' => '25',
+        'grouping' => 'status',
+        'grouping_direction' => 'desc',
+    ]);
+});
+
 it('scopes by resource, tenant and owner', function () {
     $ana = user();
     $bob = user('Bob');

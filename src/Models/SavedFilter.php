@@ -25,6 +25,9 @@ use JeffersonGoncalves\SavedFilter\Events\SavedFilterDeleted;
  * @property string|null $sort_direction asc|desc
  * @property array<string, bool>|null $toggled_columns column name => visible
  * @property string|null $search
+ * @property string|null $records_per_page a pagination option ("25", "all"), null = the table's default
+ * @property string|null $grouping group name, null = not grouped
+ * @property string|null $grouping_direction asc|desc
  * @property bool $is_default
  * @property bool $is_public
  * @property bool $is_locked
@@ -35,7 +38,8 @@ class SavedFilter extends Model
     /** The attributes that describe a filter on its own: what export writes and import reads. */
     public const PORTABLE = [
         'resource', 'name', 'icon', 'color', 'filters', 'sort_column', 'sort_direction',
-        'toggled_columns', 'search', 'is_default', 'is_public', 'is_locked', 'order_column',
+        'toggled_columns', 'search', 'records_per_page', 'grouping', 'grouping_direction',
+        'is_default', 'is_public', 'is_locked', 'order_column',
     ];
 
     protected $guarded = [];
