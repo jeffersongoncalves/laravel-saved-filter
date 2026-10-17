@@ -32,7 +32,7 @@ php artisan vendor:publish --tag="saved-filter-config"
 
 > **Upgrading from 1.0 or 1.1?** Those versions ran their migrations straight from the package. Publish and migrate as above anyway: the migrations skip a table or columns that already exist, so 1.1 installs change nothing and 1.0 installs get the new columns.
 >
-> **Upgrading to 1.3 or 1.4?** Publish and migrate again to get the new `column_searches` column (1.3) and `saved_filter_reports` table (1.4); the migrations you already ran are skipped.
+> **Upgrading to 1.3 or later?** Publish and migrate again to get the new `column_searches` column (1.3) and `saved_filter_reports` table (1.4); the migrations you already ran are skipped.
 
 ## The model
 
@@ -89,7 +89,7 @@ $filter->isVisibleTo($user);   // same rule as visibleTo()
 
 ## Scheduled reports
 
-`JeffersonGoncalves\SavedFilter\Models\SavedFilterReport`, table `saved_filter_reports`: one user's email schedule for one saved filter. Any user may subscribe to a filter they see; the report goes to that user only. This package stores the schedule — building and sending the email is up to the UI (e.g. [filament-saved-filter](https://github.com/jeffersongoncalves/filament-saved-filter)).
+`JeffersonGoncalves\SavedFilter\Models\SavedFilterReport`, table `saved_filter_reports`: one user's email schedule for one saved filter. Any user may subscribe to a filter they see; the report goes to that user only. This package decides **when and to whom** a report goes and sends the email; the UI that knows the table decides **what** is in the file (e.g. [filament-saved-filter](https://github.com/jeffersongoncalves/filament-saved-filter)).
 
 | Column | |
 |---|---|
@@ -104,20 +104,33 @@ $filter->isVisibleTo($user);   // same rule as visibleTo()
 | `last_sent_at` | when the last occurrence went out |
 
 ```php
-use JeffersonGoncalves\SavedFilter\Models\SavedFilterReport;
+SavedFilterReport::query()->active()->forUser($user)->get();
+$filter->reports;
+$report->isDue();   // once per occurrence (lastOccurrence()), never for one older than the report, never while inactive
+```
 
-foreach (SavedFilterReport::query()->active()->with('savedFilter', 'user')->get() as $report) {
-    if ($report->isDue() && $report->savedFilter->isVisibleTo($report->user)) {
-        // build and send, then:
-        $report->update(['last_sent_at' => now()]);
+### Sending
+
+`saved-filter:send-reports` is scheduled every fifteen minutes (just run Laravel's scheduler). For each active report that is due and whose filter the user still sees, it marks the occurrence as sent and queues `SendSavedFilterReport`, which asks the bound builder for the file and mails it to the user (`SavedFilterReportMail`, translated: `saved-filter::saved-filter.mail.*`). Users without an `email` get nothing.
+
+The file comes from an implementation of `BuildsSavedFilterReports` bound in the container — filament-saved-filter binds one. Without a binding the command sends nothing and leaves the reports due.
+
+```php
+use JeffersonGoncalves\SavedFilter\Contracts\BuildsSavedFilterReports;
+use JeffersonGoncalves\SavedFilter\ReportFile;
+
+class PostsReportBuilder implements BuildsSavedFilterReports
+{
+    // $state = SavedFilter::STATE attributes, $context = the report's context plus 'tenant_id'
+    public function build(Model $user, array $state, string $name, string $format, array $context): ?ReportFile
+    {
+        // null = this user may not get it
+        return new ReportFile(content: $csv, fileName: 'posts.csv', count: $rows);
     }
 }
 
-SavedFilterReport::query()->forUser($user)->get();
-$filter->reports;
+$this->app->bind(BuildsSavedFilterReports::class, PostsReportBuilder::class);
 ```
-
-`isDue()` is true once per occurrence (`lastOccurrence()`), never for an occurrence older than the report itself, never while inactive.
 
 ## Multi-tenancy
 

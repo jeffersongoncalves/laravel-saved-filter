@@ -1,18 +1,24 @@
 <?php
 
+use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Auth\User;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
+use JeffersonGoncalves\SavedFilter\Contracts\BuildsSavedFilterReports;
 use JeffersonGoncalves\SavedFilter\Events\SavedFilterCreated;
 use JeffersonGoncalves\SavedFilter\Events\SavedFilterDeleted;
+use JeffersonGoncalves\SavedFilter\Mail\SavedFilterReportMail;
 use JeffersonGoncalves\SavedFilter\Models\SavedFilter;
 use JeffersonGoncalves\SavedFilter\Models\SavedFilterReport;
+use JeffersonGoncalves\SavedFilter\ReportFile;
 
 function user(string $name = 'Ana'): User
 {
-    return User::query()->forceCreate(['name' => $name]);
+    return User::query()->forceCreate(['name' => $name, 'email' => strtolower($name).'@example.com']);
 }
 
 function savedFilter(array $attributes = [], ?User $owner = null): SavedFilter
@@ -272,4 +278,84 @@ it('tells whether a filter is visible to a user', function () {
         ->and(savedFilter([], $ana)->isVisibleTo($ana))->toBeTrue()
         ->and(savedFilter([], $bob)->isVisibleTo($ana))->toBeFalse()
         ->and(savedFilter([], $bob)->isVisibleTo(null))->toBeFalse();
+});
+
+/** Binds a builder that returns a fixed file and records what it was asked for. */
+function fakeReportBuilder(): object
+{
+    $builder = new class implements BuildsSavedFilterReports
+    {
+        /** @var array<int, array<string, mixed>> */
+        public array $calls = [];
+
+        public function build(Model $user, array $state, string $name, string $format, array $context): ?ReportFile
+        {
+            $this->calls[] = compact('user', 'state', 'name', 'format', 'context');
+
+            return new ReportFile("title\nHello", 'published.csv', 1);
+        }
+    };
+
+    app()->instance(BuildsSavedFilterReports::class, $builder);
+
+    return $builder;
+}
+
+it('emails a due report once, with the file the builder made', function () {
+    Mail::fake();
+    $builder = fakeReportBuilder();
+    $ana = user();
+    $this->travelTo('2026-10-14 09:00:00');
+    savedFilterReport(savedFilter(['tenant_id' => 7, 'search' => 'laravel']), $ana, ['context' => ['panel' => 'admin']]);
+
+    $this->travelTo('2026-10-15 08:05:00');
+    $this->artisan('saved-filter:send-reports')->expectsOutputToContain('Queued 1 report(s)');
+    $this->artisan('saved-filter:send-reports')->expectsOutputToContain('Queued 0 report(s)');
+
+    Mail::assertSentCount(1);
+    Mail::assertSent(SavedFilterReportMail::class, fn (SavedFilterReportMail $mail) => $mail->hasTo('ana@example.com')
+        && $mail->envelope()->subject === 'Report: Published'
+        && $mail->count === 1
+        && $mail->fileName === 'published.csv'
+        && $mail->content === "title\nHello");
+
+    expect($builder->calls)->toHaveCount(1)
+        ->and($builder->calls[0]['user']->is($ana))->toBeTrue()
+        ->and($builder->calls[0]['state'])->toHaveKeys(SavedFilter::STATE)
+        ->and($builder->calls[0]['state']['search'])->toBe('laravel')
+        ->and($builder->calls[0]['format'])->toBe('csv')
+        ->and($builder->calls[0]['context'])->toBe(['panel' => 'admin', 'tenant_id' => '7']);
+});
+
+it('sends nothing for paused, unshared or not yet due reports', function () {
+    Mail::fake();
+    fakeReportBuilder();
+    $ana = user();
+    $this->travelTo('2026-10-14 09:00:00');
+    savedFilterReport(savedFilter(), $ana, ['is_active' => false]);
+    savedFilterReport(savedFilter(['name' => 'Private'], user('Bob')), $ana);
+    savedFilterReport(savedFilter(['name' => 'Later']), $ana, ['time' => '08:30']); // last occurrence predates it
+
+    $this->travelTo('2026-10-15 08:05:00');
+    $this->artisan('saved-filter:send-reports')->expectsOutputToContain('Queued 0 report(s)');
+
+    Mail::assertNothingSent();
+});
+
+it('leaves reports due when no builder is bound', function () {
+    Mail::fake();
+    $this->travelTo('2026-10-14 09:00:00');
+    $report = savedFilterReport(savedFilter(), user());
+
+    $this->travelTo('2026-10-15 08:05:00');
+    $this->artisan('saved-filter:send-reports')->assertSuccessful();
+
+    Mail::assertNothingSent();
+    expect($report->refresh()->last_sent_at)->toBeNull();
+});
+
+it('schedules the reports every fifteen minutes', function () {
+    $event = collect(app(Schedule::class)->events())->first(fn ($event) => str_contains((string) $event->command, 'saved-filter:send-reports'));
+
+    expect($event?->expression)->toBe('*/15 * * * *');
 });

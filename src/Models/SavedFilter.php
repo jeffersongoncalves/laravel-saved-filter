@@ -44,6 +44,12 @@ class SavedFilter extends Model
         'is_default', 'is_public', 'is_locked', 'order_column',
     ];
 
+    /** The attributes that make up a table state: what a report is built from. */
+    public const STATE = [
+        'filters', 'sort_column', 'sort_direction', 'search', 'column_searches', 'toggled_columns',
+        'records_per_page', 'grouping', 'grouping_direction',
+    ];
+
     protected $guarded = [];
 
     protected $attributes = [
