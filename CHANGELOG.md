@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.2.1 - 2026-10-17
+
+- New installs index the table lookup with `(resource, tenant_id, owner_id)` instead of `resource` alone. `owner_type` is left out: four `varchar(255)` columns exceed MySQL's 3072-byte key limit.
+- The test suite now runs on SQLite, MySQL 8.4 and PostgreSQL 17 in CI.
+
+Upgrading: nothing to do. Tables already created keep their indexes; to get the new one, add it in your own migration:
+
+```php
+$table->index(['resource', 'tenant_id', 'owner_id'], 'saved_filters_lookup_index');
+
+```
 ## 1.2.0 - 2026-10-17
 
 Migrations now ship as publishable stubs, like the other packages: `create_saved_filters_table` and `add_pagination_and_grouping_to_saved_filters_table`, declared in order with `hasMigrations()`. They are no longer loaded from the package.
@@ -11,6 +22,7 @@ New installs:
 ```bash
 php artisan vendor:publish --tag="saved-filter-migrations"
 php artisan migrate
+
 
 ```
 Upgrading from 1.0/1.1 (which ran the migrations from the package): nothing to do. Publishing and migrating is safe too — the stubs skip a table or columns that already exist, so a 1.0 install gets the pagination/grouping columns and a 1.1 install is left unchanged.
