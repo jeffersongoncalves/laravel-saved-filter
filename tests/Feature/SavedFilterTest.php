@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Schema;
 use JeffersonGoncalves\SavedFilter\Events\SavedFilterCreated;
 use JeffersonGoncalves\SavedFilter\Events\SavedFilterDeleted;
 use JeffersonGoncalves\SavedFilter\Models\SavedFilter;
+use JeffersonGoncalves\SavedFilter\Models\SavedFilterReport;
 
 function user(string $name = 'Ana'): User
 {
@@ -29,7 +30,7 @@ function savedFilter(array $attributes = [], ?User $owner = null): SavedFilter
 it('publishes the migration stubs in order', function () {
     $this->artisan('vendor:publish', ['--tag' => 'saved-filter-migrations'])->assertSuccessful();
 
-    $published = File::glob(database_path('migrations/*_saved_filters_table.php'));
+    $published = File::glob(database_path('migrations/*_saved_filter*_table.php'));
     File::delete($published);
 
     expect(array_map(fn (string $file) => preg_replace('/^\d{4}_\d{2}_\d{2}_\d{6}_/', '', basename($file)), $published))
@@ -37,6 +38,7 @@ it('publishes the migration stubs in order', function () {
             'create_saved_filters_table.php',
             'add_pagination_and_grouping_to_saved_filters_table.php',
             'add_column_searches_to_saved_filters_table.php',
+            'create_saved_filter_reports_table.php',
         ]);
 });
 
@@ -48,6 +50,7 @@ it('runs the published migrations on tables 1.0 and 1.1 already created', functi
     $migration('create_saved_filters_table')->up();
     $migration('add_pagination_and_grouping_to_saved_filters_table')->up();
     $migration('add_column_searches_to_saved_filters_table')->up();
+    $migration('create_saved_filter_reports_table')->up();
 
     expect($filter->refresh()->records_per_page)->toBe('25');
 
@@ -198,4 +201,75 @@ it('prunes filters of deleted owners and gone resources', function () {
 
     expect(SavedFilter::query()->pluck('id')->all())->toEqualCanonicalizing([$kept->id, $preset->id])
         ->and(SavedFilter::query()->whereKey([$orphan->id, $gone->id, $discontinued->id])->exists())->toBeFalse();
+});
+
+function savedFilterReport(SavedFilter $filter, User $user, array $attributes = []): SavedFilterReport
+{
+    return SavedFilterReport::query()->create([
+        'saved_filter_id' => $filter->id,
+        'user_type' => $user->getMorphClass(),
+        'user_id' => $user->getKey(),
+        'frequency' => SavedFilterReport::DAILY,
+        'time' => '08:00',
+        'format' => 'csv',
+        ...$attributes,
+    ]);
+}
+
+it('finds the last occurrence of each frequency', function () {
+    $now = now()->setDate(2026, 10, 14)->setTime(10, 0); // a Wednesday
+    $report = fn (array $attributes) => new SavedFilterReport(['time' => '08:00', ...$attributes]);
+
+    expect($report(['frequency' => 'daily'])->lastOccurrence($now)->toDateTimeString())->toBe('2026-10-14 08:00:00')
+        ->and($report(['frequency' => 'daily', 'time' => '11:00'])->lastOccurrence($now)->toDateTimeString())->toBe('2026-10-13 11:00:00')
+        ->and($report(['frequency' => 'weekly', 'day' => 1])->lastOccurrence($now)->toDateTimeString())->toBe('2026-10-12 08:00:00')
+        ->and($report(['frequency' => 'weekly', 'day' => 5])->lastOccurrence($now)->toDateTimeString())->toBe('2026-10-09 08:00:00')
+        ->and($report(['frequency' => 'monthly', 'day' => 20])->lastOccurrence($now)->toDateTimeString())->toBe('2026-09-20 08:00:00');
+});
+
+it('is due once per occurrence, never before the schedule existed and never when inactive', function () {
+    $this->travelTo('2026-10-14 09:00:00');
+    $report = savedFilterReport(savedFilter(), user(), ['context' => ['panel' => 'admin']]);
+
+    expect($report->isDue())->toBeFalse() // today 08:00 is older than the schedule
+        ->and($report->refresh()->context)->toBe(['panel' => 'admin'])
+        ->and($report->is_active)->toBeTrue();
+
+    $this->travelTo('2026-10-15 08:00:00.400');
+    expect($report->isDue())->toBeTrue();
+
+    // Stored without the fraction: 08:00:00, the occurrence itself.
+    $report->update(['last_sent_at' => now()]);
+    $this->travelTo('2026-10-15 08:01:00');
+    expect($report->refresh()->isDue())->toBeFalse();
+
+    $this->travelTo('2026-10-16 08:00:00');
+    expect($report->isDue())->toBeTrue()
+        ->and(tap($report)->update(['is_active' => false])->isDue())->toBeFalse()
+        ->and(SavedFilterReport::query()->active()->count())->toBe(0);
+});
+
+it('scopes reports by user and deletes them with their saved filter', function () {
+    $ana = user();
+    $filter = savedFilter();
+    savedFilterReport($filter, $ana);
+    savedFilterReport($filter, user('Bob'));
+
+    expect($filter->reports()->count())->toBe(2)
+        ->and(SavedFilterReport::query()->forUser($ana)->sole()->savedFilter->is($filter))->toBeTrue();
+
+    $filter->delete();
+
+    expect(SavedFilterReport::query()->count())->toBe(0);
+});
+
+it('tells whether a filter is visible to a user', function () {
+    $ana = user();
+    $bob = user('Bob');
+
+    expect(savedFilter()->isVisibleTo($ana))->toBeTrue()
+        ->and(savedFilter(['is_public' => true], $bob)->isVisibleTo($ana))->toBeTrue()
+        ->and(savedFilter([], $ana)->isVisibleTo($ana))->toBeTrue()
+        ->and(savedFilter([], $bob)->isVisibleTo($ana))->toBeFalse()
+        ->and(savedFilter([], $bob)->isVisibleTo(null))->toBeFalse();
 });

@@ -33,4 +33,5 @@ SavedFilter::query()
 - One default per owner, tenant and resource: set `is_default` through the model (`makeDefault()`), not a query-builder update.
 - `filters` is keyed by filter name, `toggled_columns` is a flat `name => bool` map, `column_searches` is `column => term` (nested for dotted names); `records_per_page`, `grouping` and `grouping_direction` are nullable strings (null = table default).
 - `saved-filter:export` / `saved-filter:import` move presets as JSON; `saved-filter:prune` removes filters of deleted owners and missing resource classes.
-- Events: `SavedFilterCreated`, `SavedFilterDeleted`, `SavedFilterApplied` (dispatched by the UI).
+- `SavedFilterReport` (`saved_filter_reports`) stores one user's email schedule per filter (`daily`/`weekly`/`monthly`, `time`, `day`, `format`, `context` JSON); send when `isDue()` and `savedFilter->isVisibleTo($report->user)`, then set `last_sent_at`. Building and sending the email is the UI's job.
+- Events:`SavedFilterCreated`, `SavedFilterDeleted`, `SavedFilterApplied` (dispatched by the UI).

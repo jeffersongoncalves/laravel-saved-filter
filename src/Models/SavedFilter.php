@@ -5,6 +5,7 @@ namespace JeffersonGoncalves\SavedFilter\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use JeffersonGoncalves\SavedFilter\Events\SavedFilterCreated;
 use JeffersonGoncalves\SavedFilter\Events\SavedFilterDeleted;
@@ -96,6 +97,12 @@ class SavedFilter extends Model
         return $this->morphTo();
     }
 
+    /** @return HasMany<SavedFilterReport, $this> */
+    public function reports(): HasMany
+    {
+        return $this->hasMany(SavedFilterReport::class);
+    }
+
     public function isPreset(): bool
     {
         return $this->owner_id === null;
@@ -106,6 +113,12 @@ class SavedFilter extends Model
         return $owner !== null
             && $this->owner_type === $owner->getMorphClass()
             && $this->owner_id === (string) $owner->getKey();
+    }
+
+    /** Same rule as the visibleTo scope: presets, public filters and the owner's own. */
+    public function isVisibleTo(?Model $owner): bool
+    {
+        return $this->isPreset() || $this->is_public || $this->isOwnedBy($owner);
     }
 
     /**

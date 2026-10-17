@@ -36,7 +36,7 @@ class TestCase extends Orchestra
         $driver = env('SAVED_FILTER_TEST_DB_DRIVER', 'sqlite');
 
         if ($driver === 'sqlite') {
-            return ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => ''];
+            return ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => '', 'foreign_key_constraints' => true];
         }
 
         return [

@@ -32,7 +32,7 @@ php artisan vendor:publish --tag="saved-filter-config"
 
 > **Upgrading from 1.0 or 1.1?** Those versions ran their migrations straight from the package. Publish and migrate as above anyway: the migrations skip a table or columns that already exist, so 1.1 installs change nothing and 1.0 installs get the new columns.
 >
-> **Upgrading to 1.3?** Publish and migrate again to get the new `column_searches` column; the migrations you already ran are skipped.
+> **Upgrading to 1.3 or 1.4?** Publish and migrate again to get the new `column_searches` column (1.3) and `saved_filter_reports` table (1.4); the migrations you already ran are skipped.
 
 ## The model
 
@@ -84,7 +84,40 @@ SavedFilter::query()->presets()->get();
 $filter->makeDefault();
 $filter->isPreset();
 $filter->isOwnedBy($user);
+$filter->isVisibleTo($user);   // same rule as visibleTo()
 ```
+
+## Scheduled reports
+
+`JeffersonGoncalves\SavedFilter\Models\SavedFilterReport`, table `saved_filter_reports`: one user's email schedule for one saved filter. Any user may subscribe to a filter they see; the report goes to that user only. This package stores the schedule — building and sending the email is up to the UI (e.g. [filament-saved-filter](https://github.com/jeffersongoncalves/filament-saved-filter)).
+
+| Column | |
+|---|---|
+| `saved_filter_id` | the filter; deleting it deletes its reports |
+| `user_type`, `user_id` | the subscriber (string key, like the owner) — one report per filter and user |
+| `frequency` | `daily`, `weekly` or `monthly` |
+| `day` | ISO weekday (1 = Monday) for weekly, day of the month (1-28) for monthly |
+| `time` | `HH:MM`, app timezone |
+| `format` | `csv` / `xlsx` |
+| `context` | consumer data, e.g. the Filament panel and page (JSON) |
+| `is_active` | paused when false |
+| `last_sent_at` | when the last occurrence went out |
+
+```php
+use JeffersonGoncalves\SavedFilter\Models\SavedFilterReport;
+
+foreach (SavedFilterReport::query()->active()->with('savedFilter', 'user')->get() as $report) {
+    if ($report->isDue() && $report->savedFilter->isVisibleTo($report->user)) {
+        // build and send, then:
+        $report->update(['last_sent_at' => now()]);
+    }
+}
+
+SavedFilterReport::query()->forUser($user)->get();
+$filter->reports;
+```
+
+`isDue()` is true once per occurrence (`lastOccurrence()`), never for an occurrence older than the report itself, never while inactive.
 
 ## Multi-tenancy
 
