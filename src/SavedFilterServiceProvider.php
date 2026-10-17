@@ -22,6 +22,7 @@ class SavedFilterServiceProvider extends PackageServiceProvider
                 'create_saved_filters_table',
                 'add_pagination_and_grouping_to_saved_filters_table',
                 'add_column_searches_to_saved_filters_table',
+                'add_column_order_to_saved_filters_table',
                 'create_saved_filter_reports_table',
             ])
             ->hasCommands([PruneCommand::class, ExportCommand::class, ImportCommand::class, SendReportsCommand::class]);

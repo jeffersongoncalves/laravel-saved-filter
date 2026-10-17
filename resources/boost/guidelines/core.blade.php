@@ -31,7 +31,7 @@ SavedFilter::query()
 - `owner_type`/`owner_id` null = preset (visible to everyone in the tenant); `is_locked` = read-only in the UI.
 - `tenant_id` is a string column; `forTenant(null)` matches rows without a tenant (also the database-per-tenant case).
 - One default per owner, tenant and resource: set `is_default` through the model (`makeDefault()`), not a query-builder update.
-- `filters` is keyed by filter name, `toggled_columns` is a flat `name => bool` map, `column_searches` is `column => term` (nested for dotted names); `records_per_page`, `grouping` and `grouping_direction` are nullable strings (null = table default).
+- `filters` is keyed by filter name, `toggled_columns` is a flat `name => bool` map, `column_order` is a list of column names in display order (a list because MySQL JSON objects lose key order),`column_searches` is `column => term` (nested for dotted names); `records_per_page`, `grouping` and `grouping_direction` are nullable strings (null = table default).
 - `saved-filter:export` / `saved-filter:import` move presets as JSON; `saved-filter:prune` removes filters of deleted owners and missing resource classes.
 - `SavedFilterReport` (`saved_filter_reports`) stores one user's email schedule per filter (`daily`/`weekly`/`monthly`, `time`, `day`, `format`, `context` JSON); `saved-filter:send-reports` (scheduled every 15 minutes) queues `SendSavedFilterReport` for the due ones the user still sees and mails the file. The file comes from a `BuildsSavedFilterReports` implementation bound in the container (returns a `ReportFile` or null); without one nothing is sent. `SavedFilter::STATE` lists the table-state attributes passed to it.
 - Events:`SavedFilterCreated`, `SavedFilterDeleted`, `SavedFilterApplied` (dispatched by the UI).

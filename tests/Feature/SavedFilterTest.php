@@ -46,6 +46,7 @@ it('publishes the migration stubs in order', function () {
             'create_saved_filters_table.php',
             'add_pagination_and_grouping_to_saved_filters_table.php',
             'add_column_searches_to_saved_filters_table.php',
+            'add_column_order_to_saved_filters_table.php',
             'create_saved_filter_reports_table.php',
         ]);
 });
@@ -58,6 +59,7 @@ it('runs the published migrations on tables 1.0 and 1.1 already created', functi
     $migration('create_saved_filters_table')->up();
     $migration('add_pagination_and_grouping_to_saved_filters_table')->up();
     $migration('add_column_searches_to_saved_filters_table')->up();
+    $migration('add_column_order_to_saved_filters_table')->up();
     $migration('create_saved_filter_reports_table')->up();
 
     expect($filter->refresh()->records_per_page)->toBe('25');
@@ -89,6 +91,20 @@ it('stores pagination and grouping, and exports them', function () {
         'grouping' => 'status',
         'grouping_direction' => 'desc',
     ]);
+});
+
+it('keeps the column order through storage, export and import', function () {
+    $order = ['column:status', 'column:title', 'group:Details', 'group:Details:author.name', 'column:created_at'];
+    $filter = savedFilter(['column_order' => $order])->refresh();
+
+    expect($filter->column_order)->toBe($order)
+        ->and(SavedFilter::STATE)->toContain('column_order');
+
+    $exported = $filter->toPortableArray();
+    $filter->delete();
+    SavedFilter::import([$exported]);
+
+    expect(SavedFilter::query()->sole()->column_order)->toBe($order);
 });
 
 it('stores per-column searches and round-trips them through export and import', function () {

@@ -25,6 +25,7 @@ use JeffersonGoncalves\SavedFilter\Events\SavedFilterDeleted;
  * @property string|null $sort_column
  * @property string|null $sort_direction asc|desc
  * @property array<string, bool>|null $toggled_columns column name => visible
+ * @property array<int, string>|null $column_order the columns in display order, named by the UI; null = the table's own order
  * @property string|null $search
  * @property array<string, mixed>|null $column_searches column name => search, nested for dotted names (author.name)
  * @property string|null $records_per_page a pagination option ("25", "all"), null = the table's default
@@ -40,13 +41,13 @@ class SavedFilter extends Model
     /** The attributes that describe a filter on its own: what export writes and import reads. */
     public const PORTABLE = [
         'resource', 'name', 'icon', 'color', 'filters', 'sort_column', 'sort_direction',
-        'toggled_columns', 'search', 'column_searches', 'records_per_page', 'grouping', 'grouping_direction',
+        'toggled_columns', 'column_order', 'search', 'column_searches', 'records_per_page', 'grouping', 'grouping_direction',
         'is_default', 'is_public', 'is_locked', 'order_column',
     ];
 
     /** The attributes that make up a table state: what a report is built from. */
     public const STATE = [
-        'filters', 'sort_column', 'sort_direction', 'search', 'column_searches', 'toggled_columns',
+        'filters', 'sort_column', 'sort_direction', 'search', 'column_searches', 'toggled_columns', 'column_order',
         'records_per_page', 'grouping', 'grouping_direction',
     ];
 
@@ -64,6 +65,7 @@ class SavedFilter extends Model
         'tenant_id' => 'string',
         'filters' => 'array',
         'toggled_columns' => 'array',
+        'column_order' => 'array',
         'column_searches' => 'array',
         'is_default' => 'boolean',
         'is_public' => 'boolean',

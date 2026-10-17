@@ -32,7 +32,7 @@ php artisan vendor:publish --tag="saved-filter-config"
 
 > **Upgrading from 1.0 or 1.1?** Those versions ran their migrations straight from the package. Publish and migrate as above anyway: the migrations skip a table or columns that already exist, so 1.1 installs change nothing and 1.0 installs get the new columns.
 >
-> **Upgrading to 1.3 or later?** Publish and migrate again to get the new `column_searches` column (1.3) and `saved_filter_reports` table (1.4); the migrations you already ran are skipped.
+> **Upgrading to 1.3 or later?** Publish and migrate again to get the new `column_searches` column (1.3), `saved_filter_reports` table (1.4) and `column_order` column (1.6); the migrations you already ran are skipped.
 
 ## The model
 
@@ -47,6 +47,7 @@ php artisan vendor:publish --tag="saved-filter-config"
 | `filters` | filter state, keyed by filter name (JSON) |
 | `sort_column`, `sort_direction` | `asc` / `desc` |
 | `toggled_columns` | `{"column": true/false}` (JSON) |
+| `column_order` | the columns in display order, as the UI names them (JSON list), `null` = the table's own order |
 | `search` | search term |
 | `column_searches` | per-column search terms, `{"column": "term"}`, nested for dotted names (JSON) |
 | `records_per_page` | pagination option (`"25"`, `"all"`), `null` = the table's default |
