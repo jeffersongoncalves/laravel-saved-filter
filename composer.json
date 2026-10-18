@@ -32,6 +32,9 @@
         "pestphp/pest": "^3.0|^4.0",
         "pestphp/pest-plugin-laravel": "^3.0|^4.0"
     },
+    "suggest": {
+        "jeffersongoncalves/laravel-report-url": "Email report files too large to attach as temporary download links (^1.0)"
+    },
     "autoload": {
         "psr-4": {
             "JeffersonGoncalves\\SavedFilter\\": "src/"
