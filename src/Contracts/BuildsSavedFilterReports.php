@@ -15,7 +15,7 @@ interface BuildsSavedFilterReports
      * The report file of a table state for a user, or null when that user may not get it.
      *
      * @param  array<string, mixed>  $state  the SavedFilter::STATE attributes
-     * @param  array<string, mixed>  $context  the report's context plus 'tenant_id'
+     * @param  array<string, mixed>  $context  the report's context plus 'tenant_id', and for scheduled sends 'saved_filter_id' (link to the view) and 'report_id' (e.g. a signed unsubscribe route)
      */
     public function build(Model $user, array $state, string $name, string $format, array $context): ?ReportFile;
 }

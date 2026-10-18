@@ -62,6 +62,7 @@ it('publishes the migration stubs in order', function () {
             'add_column_searches_to_saved_filters_table.php',
             'add_column_order_to_saved_filters_table.php',
             'create_saved_filter_reports_table.php',
+            'add_timezone_to_saved_filter_reports_table.php',
         ]);
 });
 
@@ -75,6 +76,7 @@ it('runs the published migrations on tables 1.0 and 1.1 already created', functi
     $migration('add_column_searches_to_saved_filters_table')->up();
     $migration('add_column_order_to_saved_filters_table')->up();
     $migration('create_saved_filter_reports_table')->up();
+    $migration('add_timezone_to_saved_filter_reports_table')->up();
 
     expect($filter->refresh()->records_per_page)->toBe('25');
 
@@ -348,7 +350,7 @@ it('emails a due report once, with the file the builder made', function () {
     $builder = fakeReportBuilder();
     $ana = user();
     $this->travelTo('2026-10-14 09:00:00');
-    savedFilterReport(savedFilter(['tenant_id' => 7, 'search' => 'laravel']), $ana, ['context' => ['panel' => 'admin']]);
+    $report = savedFilterReport($filter = savedFilter(['tenant_id' => 7, 'search' => 'laravel']), $ana, ['context' => ['panel' => 'admin']]);
 
     $this->travelTo('2026-10-15 08:05:00');
     $this->artisan('saved-filter:send-reports')->expectsOutputToContain('Queued 1 report(s)');
@@ -367,7 +369,7 @@ it('emails a due report once, with the file the builder made', function () {
         ->and($builder->calls[0]['state'])->toHaveKeys(SavedFilter::STATE)
         ->and($builder->calls[0]['state']['search'])->toBe('laravel')
         ->and($builder->calls[0]['format'])->toBe('csv')
-        ->and($builder->calls[0]['context'])->toBe(['panel' => 'admin', 'tenant_id' => '7']);
+        ->and($builder->calls[0]['context'])->toBe(['panel' => 'admin', 'tenant_id' => '7', 'saved_filter_id' => $filter->id, 'report_id' => $report->id]);
 });
 
 it('renders the report email with the schedule and a button, without markdown from the view name', function () {
@@ -388,6 +390,44 @@ it('renders the report email with the schedule and a button, without markdown fr
         ->not->toContain('To stop receiving it');
 });
 
+it('runs the schedule on the wall clock of the report\'s timezone', function () {
+    $report = fn (array $attributes) => new SavedFilterReport(['frequency' => 'weekly', 'day' => 4, 'time' => '08:00', 'timezone' => 'America/Sao_Paulo', ...$attributes]);
+    $thursday = fn (string $time) => now()->setDate(2026, 10, 15)->setTimeFromTimeString($time); // the app runs in UTC
+
+    expect($report([])->lastOccurrence($thursday('11:00'))->toDateTimeString())->toBe('2026-10-15 11:00:00')
+        ->and($report([])->lastOccurrence($thursday('11:00'))->getTimezone()->getName())->toBe('UTC')
+        ->and($report([])->lastOccurrence($thursday('10:59'))->toDateTimeString())->toBe('2026-10-08 11:00:00')
+        ->and($report(['timezone' => 'Not/AZone'])->lastOccurrence($thursday('10:59'))->toDateTimeString())->toBe('2026-10-15 08:00:00')
+        ->and($report(['timezone' => 'Not/AZone'])->scheduleTimezone())->toBe('UTC')
+        ->and($report(['timezone' => null])->scheduleTimezone())->toBe('UTC')
+        ->and($report(['timezone' => 'US/Eastern'])->scheduleTimezone())->toBe('US/Eastern');
+});
+
+it('sends once per day across a DST change, for a time the change skips or repeats', function () {
+    // Lisbon jumps from 01:00 to 02:00 on 2026-03-29 (01:30 doesn't exist) and falls back from 02:00 to 01:00 on 2026-10-25 (01:30 happens twice).
+    $cases = [
+        ['08:00', 3, 28, ['2026-03-28 08:00:00', '2026-03-29 07:00:00']], // WET (UTC+0), then WEST (UTC+1)
+        ['01:30', 3, 28, ['2026-03-28 01:30:00', '2026-03-29 01:30:00']], // 01:30 WET, then pushed to 02:30 WEST
+        ['01:30', 10, 24, ['2026-10-24 00:30:00', '2026-10-25 00:30:00']], // the first 01:30 (WEST) only
+    ];
+
+    foreach ($cases as [$time, $month, $day, $expected]) {
+        $report = new SavedFilterReport(['frequency' => 'daily', 'time' => $time, 'timezone' => 'Europe/Lisbon']);
+        $report->created_at = $start = now()->setDate(2026, $month, $day)->startOfDay();
+        $sends = [];
+
+        // The scheduler runs every 15 minutes for two days (UTC).
+        for ($now = $start->copy(); $now->lt($start->copy()->addDays(2)); $now = $now->copy()->addMinutes(15)) {
+            if ($report->isDue($now)) {
+                $report->last_sent_at = $now;
+                $sends[] = $now->toDateTimeString();
+            }
+        }
+
+        expect([$time => $sends])->toBe([$time => $expected]);
+    }
+});
+
 it('describes the schedule in the app locale', function () {
     $report = fn (array $attributes) => new SavedFilterReport(['time' => '08:00', ...$attributes]);
 
@@ -397,7 +437,9 @@ it('describes the schedule in the app locale', function () {
 
     app()->setLocale('pt_BR');
 
-    expect($report(['frequency' => 'weekly', 'day' => 5])->describeSchedule())->toBe('Enviado toda semana (sexta-feira) às 08:00.');
+    expect($report(['frequency' => 'weekly', 'day' => 5])->describeSchedule())->toBe('Enviado toda semana (sexta-feira) às 08:00.')
+        ->and($report(['frequency' => 'daily', 'timezone' => 'America/Sao_Paulo'])->describeSchedule())->toBe('Enviado todos os dias às 08:00 (America/Sao_Paulo).')
+        ->and($report(['frequency' => 'daily', 'timezone' => 'UTC'])->describeSchedule())->toBe('Enviado todos os dias às 08:00.');
 });
 
 it('builds and sends the report in the user\'s preferred locale', function () {

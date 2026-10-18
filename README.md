@@ -32,7 +32,7 @@ php artisan vendor:publish --tag="saved-filter-config"
 
 > **Upgrading from 1.0 or 1.1?** Those versions ran their migrations straight from the package. Publish and migrate as above anyway: the migrations skip a table or columns that already exist, so 1.1 installs change nothing and 1.0 installs get the new columns.
 >
-> **Upgrading to 1.3 or later?** Publish and migrate again to get the new `column_searches` column (1.3), `saved_filter_reports` table (1.4) and `column_order` column (1.6); the migrations you already ran are skipped.
+> **Upgrading to 1.3 or later?** Publish and migrate again to get the new `column_searches` column (1.3), `saved_filter_reports` table (1.4), `column_order` column (1.6) and reports `timezone` column (1.10); the migrations you already ran are skipped.
 
 ## The model
 
@@ -98,7 +98,8 @@ $filter->isVisibleTo($user);   // same rule as visibleTo()
 | `user_type`, `user_id` | the subscriber (string key, like the owner) — one report per filter and user |
 | `frequency` | `daily`, `weekly` or `monthly` |
 | `day` | ISO weekday (1 = Monday) for weekly, day of the month (1-28) for monthly |
-| `time` | `HH:MM`, app timezone |
+| `time` | `HH:MM`, on the clock of `timezone` |
+| `timezone` | IANA name (`America/Sao_Paulo`), `null` = the app timezone; 08:00 stays 08:00 across DST |
 | `format` | `csv` / `xlsx` |
 | `context` | consumer data, e.g. the Filament panel and page (JSON) |
 | `is_active` | paused when false |
@@ -126,7 +127,8 @@ use JeffersonGoncalves\SavedFilter\ReportFile;
 
 class PostsReportBuilder implements BuildsSavedFilterReports
 {
-    // $state = SavedFilter::STATE attributes, $context = the report's context plus 'tenant_id'
+    // $state = SavedFilter::STATE attributes
+    // $context = the report's context plus 'tenant_id', and for scheduled sends 'saved_filter_id' and 'report_id'
     public function build(Model $user, array $state, string $name, string $format, array $context): ?ReportFile
     {
         // null = this user may not get it

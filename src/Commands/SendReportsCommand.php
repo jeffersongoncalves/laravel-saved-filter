@@ -42,7 +42,7 @@ class SendReportsCommand extends Command
                 $filter->only(SavedFilter::STATE),
                 $filter->name,
                 $report->format,
-                [...$report->context ?? [], 'tenant_id' => $filter->tenant_id],
+                [...$report->context ?? [], 'tenant_id' => $filter->tenant_id, 'saved_filter_id' => $filter->getKey(), 'report_id' => $report->getKey()],
                 $report->id,
                 $previousSentAt,
             );
