@@ -4,12 +4,15 @@ namespace JeffersonGoncalves\SavedFilter\Jobs;
 
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Contracts\Translation\HasLocalePreference;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Traits\Localizable;
 use JeffersonGoncalves\SavedFilter\Contracts\BuildsSavedFilterReports;
+use JeffersonGoncalves\SavedFilter\Contracts\HostsReportFiles;
 use JeffersonGoncalves\SavedFilter\Models\SavedFilterReport;
 use JeffersonGoncalves\SavedFilter\Notifications\SavedFilterReportNotification;
 
@@ -20,6 +23,7 @@ class SendSavedFilterReport implements ShouldQueue
 {
     use Dispatchable;
     use InteractsWithQueue;
+    use Localizable;
     use Queueable;
     use SerializesModels;
 
@@ -50,17 +54,27 @@ class SendSavedFilterReport implements ShouldQueue
             return;
         }
 
-        $file = app(BuildsSavedFilterReports::class)->build($this->user, $this->state, $this->name, $this->format, $this->context);
+        // On-demand notifications don't read HasLocalePreference: apply it here, to the file, the schedule and the email.
+        $locale = $this->user instanceof HasLocalePreference ? $this->user->preferredLocale() : null;
 
-        if (! $file) {
-            return;
-        }
+        $this->withLocale($locale, function () use ($locale): void {
+            $file = app(BuildsSavedFilterReports::class)->build($this->user, $this->state, $this->name, $this->format, $this->context);
 
-        $schedule = $this->reportId === null ? null : SavedFilterReport::query()->find($this->reportId)?->describeSchedule();
+            if (! $file || ($file->count === 0 && ! config('saved-filter.reports_send_empty', true))) {
+                return;
+            }
 
-        // On demand: the user model doesn't need the Notifiable trait.
-        Notification::route('mail', $this->user->getAttribute('email'))
-            ->notify(new SavedFilterReportNotification($this->name, $file->count, $file->content, $file->fileName, $schedule, $file->url));
+            $tooLarge = strlen($file->content) > (int) config('saved-filter.reports_max_attachment_size', 10 * 1024 * 1024);
+            $download = $tooLarge && app()->bound(HostsReportFiles::class) ? app(HostsReportFiles::class)->host($file, $this->user) : null;
+            $schedule = $this->reportId === null ? null : SavedFilterReport::query()->find($this->reportId)?->describeSchedule();
+
+            $notification = new SavedFilterReportNotification(
+                $this->name, $file->count, $file->content, $file->fileName, $schedule, $file->url, $file->unsubscribeUrl, $tooLarge, $download,
+            );
+
+            // On demand: the user model doesn't need the Notifiable trait.
+            Notification::route('mail', $this->user->getAttribute('email'))->notify($notification->locale($locale));
+        });
     }
 
     /**

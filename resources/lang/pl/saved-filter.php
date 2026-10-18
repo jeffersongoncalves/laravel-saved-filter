@@ -6,6 +6,10 @@ return [
         'body' => 'W załączniku: :count rekordów widoku „:name”.',
         'stop' => 'Aby przestać go otrzymywać, wyłącz ten raport w widoku.',
         'action' => 'Otwórz widok',
+        'too_large' => 'Plik (:size) jest za duży, aby go załączyć.',
+        'download' => 'Pobierz raport',
+        'expires' => 'Link do pobrania wygasa :date.',
+        'unsubscribe' => 'Przestań otrzymywać ten raport',
     ],
 
     'schedule' => [

@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Contracts\Translation\HasLocalePreference;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Auth\User;
@@ -11,6 +12,7 @@ use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
 use JeffersonGoncalves\SavedFilter\Contracts\BuildsSavedFilterReports;
+use JeffersonGoncalves\SavedFilter\Contracts\HostsReportFiles;
 use JeffersonGoncalves\SavedFilter\Events\SavedFilterCreated;
 use JeffersonGoncalves\SavedFilter\Events\SavedFilterDeleted;
 use JeffersonGoncalves\SavedFilter\Jobs\SendSavedFilterReport;
@@ -18,6 +20,17 @@ use JeffersonGoncalves\SavedFilter\Models\SavedFilter;
 use JeffersonGoncalves\SavedFilter\Models\SavedFilterReport;
 use JeffersonGoncalves\SavedFilter\Notifications\SavedFilterReportNotification;
 use JeffersonGoncalves\SavedFilter\ReportFile;
+use JeffersonGoncalves\SavedFilter\ReportLink;
+
+class LocalizedUser extends User implements HasLocalePreference
+{
+    protected $table = 'users';
+
+    public function preferredLocale(): string
+    {
+        return 'pt_BR';
+    }
+}
 
 function user(string $name = 'Ana'): User
 {
@@ -304,18 +317,24 @@ it('tells whether a filter is visible to a user', function () {
 });
 
 /** Binds a builder that returns a fixed file and records what it was asked for. */
-function fakeReportBuilder(): object
+function fakeReportBuilder(?ReportFile $file = null): object
 {
-    $builder = new class implements BuildsSavedFilterReports
+    $builder = new class($file ?? new ReportFile("title\nHello", 'published.csv', 1, 'https://app.test/posts')) implements BuildsSavedFilterReports
     {
         /** @var array<int, array<string, mixed>> */
         public array $calls = [];
 
+        /** @var array<int, string> the app locale during each build */
+        public array $locales = [];
+
+        public function __construct(public ReportFile $file) {}
+
         public function build(Model $user, array $state, string $name, string $format, array $context): ?ReportFile
         {
             $this->calls[] = compact('user', 'state', 'name', 'format', 'context');
+            $this->locales[] = app()->getLocale();
 
-            return new ReportFile("title\nHello", 'published.csv', 1, 'https://app.test/posts');
+            return $this->file;
         }
     };
 
@@ -379,6 +398,92 @@ it('describes the schedule in the app locale', function () {
     app()->setLocale('pt_BR');
 
     expect($report(['frequency' => 'weekly', 'day' => 5])->describeSchedule())->toBe('Enviado toda semana (sexta-feira) às 08:00.');
+});
+
+it('builds and sends the report in the user\'s preferred locale', function () {
+    Notification::fake();
+    $builder = fakeReportBuilder();
+    $this->travelTo('2026-10-14 09:00:00');
+    $user = LocalizedUser::query()->forceCreate(['name' => 'Ana', 'email' => 'ana@example.com']);
+    savedFilterReport(savedFilter(), $user);
+
+    $this->travelTo('2026-10-15 08:05:00');
+    $this->artisan('saved-filter:send-reports')->assertSuccessful();
+
+    Notification::assertSentOnDemand(SavedFilterReportNotification::class, fn (SavedFilterReportNotification $notification) => $notification->locale === 'pt_BR'
+        && $notification->schedule === 'Enviado todos os dias às 08:00.');
+
+    expect($builder->locales)->toBe(['pt_BR'])
+        ->and(app()->getLocale())->toBe('en');
+});
+
+it('links to files over the size limit instead of attaching them', function () {
+    Notification::fake();
+    config(['saved-filter.reports_max_attachment_size' => 5]);
+    fakeReportBuilder();
+
+    (new SendSavedFilterReport(user(), [], 'Published'))->handle();
+
+    Notification::assertSentOnDemand(SavedFilterReportNotification::class, fn (SavedFilterReportNotification $notification) => $notification->tooLarge
+        && $notification->download === null);
+
+    app()->instance(HostsReportFiles::class, new class implements HostsReportFiles
+    {
+        public function host(ReportFile $file, Model $user): ?ReportLink
+        {
+            return new ReportLink('https://app.test/reports/abc', now()->addDays(7));
+        }
+    });
+    (new SendSavedFilterReport(user('Bob'), [], 'Published'))->handle();
+
+    Notification::assertSentOnDemand(SavedFilterReportNotification::class, fn (SavedFilterReportNotification $notification) => $notification->tooLarge
+        && $notification->download?->url === 'https://app.test/reports/abc');
+});
+
+it('renders a download link, or only the count, for files too large to attach', function () {
+    $this->travelTo('2026-10-15 08:00:00');
+    $mail = fn (?ReportLink $download) => (new SavedFilterReportNotification('Deals', 3, str_repeat('x', 2 * 1024 * 1024), 'deals.xlsx', null, 'https://app.test/posts', null, true, $download))
+        ->toMail(new AnonymousNotifiable);
+
+    $linked = $mail(new ReportLink('https://app.test/reports/abc', now()->addDays(7)));
+    $html = (string) $linked->render();
+
+    expect($linked->rawAttachments)->toBe([])
+        ->and($linked->actionUrl)->toBe('https://app.test/reports/abc')
+        ->and($html)->toContain('The file (2 MB) is too large to attach.')
+        ->toContain('Download the report')
+        ->toContain('The download link expires on October 22, 2026 8:00 AM.')
+        ->toContain('href="https://app.test/posts"');
+
+    $countOnly = $mail(null);
+
+    expect($countOnly->rawAttachments)->toBe([])
+        ->and($countOnly->actionUrl)->toBe('https://app.test/posts')
+        ->and((string) $countOnly->render())->toContain('The file (2 MB) is too large to attach.')
+        ->not->toContain('Download the report');
+});
+
+it('skips empty reports when told to', function () {
+    Notification::fake();
+    fakeReportBuilder(new ReportFile('title', 'empty.csv', 0));
+
+    (new SendSavedFilterReport(user(), [], 'Empty'))->handle();
+    Notification::assertSentOnDemandTimes(SavedFilterReportNotification::class, 1);
+
+    config(['saved-filter.reports_send_empty' => false]);
+    (new SendSavedFilterReport(user('Bob'), [], 'Empty'))->handle();
+    Notification::assertSentOnDemandTimes(SavedFilterReportNotification::class, 1);
+});
+
+it('links to the one-click unsubscribe when the builder gives one', function () {
+    $html = (string) (new SavedFilterReportNotification('Deals', 1, 'csv', 'deals.csv', 'Sent every day at 08:00.', null, 'https://app.test/reports/1/unsubscribe?signature=a(b)'))
+        ->toMail(new AnonymousNotifiable)
+        ->render();
+
+    expect($html)->toContain('Sent every day at 08:00.')
+        ->toContain('href="https://app.test/reports/1/unsubscribe?signature=a%28b%29"')
+        ->toContain('Stop receiving this report')
+        ->not->toContain('turn this report off in the view');
 });
 
 it('sends nothing for paused, unshared or not yet due reports', function () {

@@ -6,6 +6,10 @@ return [
         'body' => 'Attached: the :count records of the view ":name".',
         'stop' => 'To stop receiving it, turn this report off in the view.',
         'action' => 'Open the view',
+        'too_large' => 'The file (:size) is too large to attach.',
+        'download' => 'Download the report',
+        'expires' => 'The download link expires on :date.',
+        'unsubscribe' => 'Stop receiving this report',
     ],
 
     'schedule' => [

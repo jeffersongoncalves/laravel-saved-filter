@@ -130,11 +130,36 @@ class PostsReportBuilder implements BuildsSavedFilterReports
     public function build(Model $user, array $state, string $name, string $format, array $context): ?ReportFile
     {
         // null = this user may not get it
-        return new ReportFile(content: $csv, fileName: 'posts.csv', count: $rows, url: route('posts.index'));
+        return new ReportFile(
+            content: $csv,
+            fileName: 'posts.csv',
+            count: $rows,
+            url: route('posts.index'),                                   // "Open the view" button
+            unsubscribeUrl: URL::signedRoute('reports.unsubscribe', $id), // one-click stop link (optional)
+        );
     }
 }
 
 $this->app->bind(BuildsSavedFilterReports::class, PostsReportBuilder::class);
+```
+
+- **Language:** when the user model implements `HasLocalePreference`, the file is built and the email sent in `preferredLocale()` (on-demand notifications don't do that by themselves).
+- **Large files:** over `reports_max_attachment_size` (10 MB by default, in `config/saved-filter.php`) the file isn't attached. With a `HostsReportFiles` implementation bound (e.g. [jeffersongoncalves/laravel-report-url](https://github.com/jeffersongoncalves/laravel-report-url)), the email carries a **Download the report** button and when the link expires; without one, it gives the record count and the link to the view.
+- **Empty reports:** set `reports_send_empty` to `false` to skip the email when there are no records.
+
+```php
+use JeffersonGoncalves\SavedFilter\Contracts\HostsReportFiles;
+use JeffersonGoncalves\SavedFilter\ReportLink;
+
+class TemporaryReportLinks implements HostsReportFiles
+{
+    public function host(ReportFile $file, Model $user): ?ReportLink
+    {
+        Storage::disk('s3')->put($path = 'reports/'.Str::uuid().'/'.$file->fileName, $file->content);
+
+        return new ReportLink(Storage::disk('s3')->temporaryUrl($path, $expires = now()->addDays(7)), $expires);
+    }
+}
 ```
 
 ## Multi-tenancy

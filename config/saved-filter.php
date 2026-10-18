@@ -27,6 +27,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Report emails
+    |--------------------------------------------------------------------------
+    |
+    | Files larger than this many bytes are not attached: the email carries a
+    | download link instead when a HostsReportFiles implementation is bound
+    | (e.g. jeffersongoncalves/laravel-report-url), otherwise only the count
+    | and the link to the view. Mail providers usually cap messages at 10-25 MB.
+    |
+    | Set send_empty to false to skip the email when the report has no records.
+    |
+    */
+    'reports_max_attachment_size' => 10 * 1024 * 1024,
+
+    'reports_send_empty' => true,
+
+    /*
+    |--------------------------------------------------------------------------
     | Model
     |--------------------------------------------------------------------------
     |
