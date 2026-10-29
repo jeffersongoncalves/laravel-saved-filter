@@ -400,7 +400,7 @@ it('runs the schedule on the wall clock of the report\'s timezone', function () 
         ->and($report(['timezone' => 'Not/AZone'])->lastOccurrence($thursday('10:59'))->toDateTimeString())->toBe('2026-10-15 08:00:00')
         ->and($report(['timezone' => 'Not/AZone'])->scheduleTimezone())->toBe('UTC')
         ->and($report(['timezone' => null])->scheduleTimezone())->toBe('UTC')
-        ->and($report(['timezone' => 'US/Eastern'])->scheduleTimezone())->toBe('US/Eastern');
+        ->and($report(['timezone' => 'America/New_York'])->scheduleTimezone())->toBe('America/New_York');
 });
 
 it('sends once per day across a DST change, for a time the change skips or repeats', function () {
